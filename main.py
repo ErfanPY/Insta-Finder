@@ -20,8 +20,7 @@ instaClient.login(username, password)
 apiClient = SightengineClient('1169033501', '7ymikLMsYSdhYpjVA2xd')
 
 class node ():
-    def __init__(self, userPro, viewer, quickMode=True):
-        self.quickMode = quickMode
+    def __init__(self, userPro, viewer):
         self.viewer = viewer
         self.qualuty = 0
         self.posts = []
@@ -36,32 +35,37 @@ class node ():
         
         if debug : print('Node ({}) Made'.format(self.username))
 
-    def calcFitScroe(self, gender='male', num=10, minor=0, nude=0):
+    def calcFitScroe(self, gender='male', num=10, adult=1, nude=0):
         self.fitScore = 0
         inum = 0
+        
         for post in self.profile.get_posts():
-
             if inum >= num : break
             output = apiClient.check('nudity','face-attributes').set_url('{}'.format(post.url))
             try :
                 attr = output['faces'][0]['attributes']
             except:
+                print('NO FACE DETECTED')
                 continue
+            
+            ageScore = (1*adult)+(-1*adult)* attr['minor']
+            nudeScore = (1*nude)+(-1*nude)* output['nudity']['safe']
+            try :
+                if output['nudity']['partial_tag']:nusescore = 1
+            except :
+                pass
+            
+            imgFitScore = (attr[gender] + ageScore + nudeScore)/3
+            
+            self.fitScore += imgFitScore
+            self.posts.append({post:[output, imgFitScore]})
 
-            if not minor :
-                ageScore = 1-attr['minor']
-            else :
-                ageScore = attr['minor']
-
-            nudeAttr = output['nudity']
-            if not nude :
-                nudeScore = nudeAttr['safe']
-            else :
-                nudeScore = nudeAttr['partial']+nudeAttr['raw']
-            self.fitScore += (attr[gender]+ageScore+nudeScore)/3
             inum += 1
-            if debug : print('Image Score:', (attr[gender]+ageScore+nudeScore)/3)
+            if debug : print('Image Score:{} \ngender{}:{} adult{}:{} nude{}:{}\n{}\n'.format(
+                imgFitScore, gender, attr[gender], adult, ageScore, nude, nudeScore, post.url))
+            
         self.fitScore /= num
+        return self.fitScore
         
     def expandNode (self, option, num):
         if 'folower' in option :
@@ -71,7 +75,7 @@ class node ():
                 
                 if len(self.users) >= num:
                     break
-                usersNode = node(follower, self.viewer, self.quickMode)
+                usersNode = node(follower, self.viewer)
                 users.append(userNode)
 
         if 'folowing' in option :
@@ -81,28 +85,29 @@ class node ():
                 
                 if len(self.users) >= num:
                     break
-                usersNode = node(followee, self.viewer, self.quickMode)
+                usersNode = node(followee, self.viewer)
                 users.append(userNode)
                 
         if 'tag' in option :
             for post in self.profile.get_tagged_posts():
                 if debug :print('Expanding By Tag')
                 
-                if not self.quickMode:
-                    self.posts.append(post)
+                self.posts.append(post)
                 
                 if len(self.users) >= num:
                     break
                 for user in post.tagged_users :
                     if user != self.username :
-                        userNode = node(user, self.viewer, self.quickMode)
+                        userNode = node(user, self.viewer)
                         self.users.append(userNode) 
 
         return self.users[:num]
 
 if __name__ == "__main__":
     testNode = node('kimkardashian', instaClient)
-    print(testNode.calcFitScroe(gender='female', num=4, minor=0, nude=1))
+    fitScore = testNode.calcFitScroe(gender='female', num=4, adult=1, nude=1)
+    if fitScore >= 0.45:
+        testNode.expandNode('tag folowing', 10)
     
 
 #TODO:
